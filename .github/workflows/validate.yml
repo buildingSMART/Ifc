@@ -1,0 +1,43 @@
+name: Validate
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 5
+    - name: Setup python environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.11
+    - name: Install python packages
+      run: |
+        git clone --depth 1 https://github.com/IfcOpenShell/step-file-parser
+        pip install --disable-pip-version-check --user -r ./step-file-parser/requirements.in
+    - name: Validate IFC example files
+      run: |
+        valid_count=0
+        invalid_count=0
+        set +e
+        while IFS= read -r file; do
+          printf "Validating $file ..."
+          python ./step-file-parser/main.py "$file" > validate.log 2>&1
+          exit_code=$?
+          if [ $exit_code -eq 0 ]; then
+            ((valid_count++))
+            printf " valid\n"
+          else
+            ((invalid_count++))
+            printf " invalid\n"
+          fi
+        done < <(find ./Examples -type f -name '*.ifc')
+        echo "Number of valid files: $valid_count"
+        echo "Number of invalid files: $invalid_count"
+        set -e
+        if [ $invalid_count -gt 0 ]; then
+          exit 1
+        fi
